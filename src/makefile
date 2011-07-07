@@ -126,7 +126,8 @@ SOCKET_OBJS= \
 	select.$(O) \
 	tcp.$(O) \
 	udp.$(O) \
-	lua_typeerror.$(O)
+	lua_typeerror.$(O) \
+	scripts.$(O)
 
 #------
 # Modules belonging mime-core

@@ -32,7 +32,11 @@ function newset()
         insert = function(set, value)
             if not reverse[value] then
                 table.insert(set, value)
-                reverse[value] = table.getn(set)
+                if _VERSION == 'Lua 5.2' then
+                	reverse[value] = #set
+                else
+                	reverse[value] = table.getn(set)
+                end
             end
         end,
         remove = function(set, value)
