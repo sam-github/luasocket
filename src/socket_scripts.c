@@ -104,19 +104,28 @@ static const char* luasocket_scripts[] = {
 #include "mime.h"
 #include <string.h>
 
+static void preload_error_if_stack_top_is_not_a_table(lua_State* L)
+{
+	if (lua_type(L,-1) != LUA_TTABLE )
+		luaL_error(L, "Lua %d get_preload_table failed to retrieve the preload table. Stack top is %s\n"
+		,LUA_VERSION_NUM,lua_typename(L,-1));
+}
+
 #if LUA_VERSION_NUM < 502
 #	define LUA_OK 0
-static void luaL_preload(L)
-{	
-	lua_getglobal(L,"package");
-	lua_getfield(L, -1, "preload");
-}
-#	define LUA_ERRGCMM 1000
+#	define LUA_ERRGCMM 1000 /*number not returned as an error for this Lua version*/
+	static void get_preload_table(lua_State* L)
+	{	
+		lua_getglobal(L,"package");
+		lua_getfield(L, -1, "preload");
+		preload_error_if_stack_top_is_not_a_table(L);
+	}
 #else
-static void luaL_preload(lua_State* L)
-{
-	lua_getfield(L, LUA_REGISTRYINDEX, "_PRELOAD");
-}
+	static void get_preload_table(lua_State* L)
+	{
+		lua_getfield(L, LUA_REGISTRYINDEX, "_PRELOAD");
+		preload_error_if_stack_top_is_not_a_table(L);
+	}
 #endif
 
 static int load_and_run_buffer(lua_State* L,int char_buff_index,char const* name)
@@ -129,34 +138,22 @@ static int load_and_run_buffer(lua_State* L,int char_buff_index,char const* name
 		return top - lua_gettop(L);
 	}
 	else if(res == LUA_ERRSYNTAX)
-		printf("LUA_ERRSYNTAX %s\n",lua_tostring(L,-1));
+		lua_pushliteral(L,"LUA_ERRSYNTAX");
 	else if(res == LUA_ERRMEM)
-		printf("LUA_ERRMEM %s\n",lua_tostring(L,-1));	
+		lua_pushliteral(L,"LUA_ERRMEM");	
 	else if(res == LUA_ERRGCMM)
-		printf("LUA_ERRGCMM %s\n",lua_tostring(L,-1));
+		lua_pushliteral(L,"LUA_ERRGCMM");
 	
-	return 0;
-}
-
-static int luasocket_needs_loading(lua_State* L)
-{
-	int const top = lua_gettop(L);
-	luaL_preload(L);
-	lua_pushliteral(L,"url.lua");
-	lua_gettable(L, -2);
-	int const needs_loading = lua_type(L, -1);
-	lua_settop(L, top);
-	return needs_loading == LUA_TNIL;
+	lua_pushfstring(L,"ERROR: %s when loading %s :\n\t%s\n",lua_tostring(L,-1),name,lua_tostring(L,-2));
+	return lua_error(L);
 }
 
 static int luasocket_socket_loader(lua_State* L)
 {
-	luaopen_socket_core(L);
 	return load_and_run_buffer(L,0,"embedded socket.lua");
 }
 static int luasocket_mime_loader(lua_State* L)
 {
-	luaopen_mime_core(L);
 	return load_and_run_buffer(L,1,"embedded mime.lua");
 }
 static int luasocket_ltn12_loader(lua_State* L)
@@ -198,30 +195,40 @@ static luaL_Reg embedded_modules[] =
 	,{"socket.smtp",luasocket_smtp_loader}
 	,{"socket.tp",luasocket_tp_loader}
 	,{"socket.url",luasocket_url_loader}
+	,{"socket.core",luaopen_socket_core}
+	,{"mime.core",luaopen_mime_core}
 	,{0,0}
 };
-LUASOCKET_API int luaopen_luasocket(lua_State *L)
+
+static void luasocket_register_modules(lua_State *L,luaL_Reg* modules)
 {
 	int top = lua_gettop(L);
-	luaL_preload(L);
+	get_preload_table(L);
 	int loaders = lua_gettop(L);
-	for (int i = 0; embedded_modules[i].name ;++i)
+	for (int i = 0; modules[i].name ;++i)
 	{
-		lua_pushstring(L,embedded_modules[i].name);
-		lua_pushcclosure(L, embedded_modules[i].func, 0);
+		lua_pushstring(L,modules[i].name);
+		lua_pushcclosure(L, modules[i].func, 0);
 		lua_settable(L, loaders);
 	}
 	lua_settop(L, top);
+}	
+
+LUASOCKET_API int luaopen_luasocket(lua_State *L)
+{
+	luasocket_register_modules(L,embedded_modules);
 	return 0;
 }
+
+/*
+Called via "require 'socket'" when the library is a shared object or a symlink with the name
+'socket.so' It registers the needed module loaders and runs the socket module returning the results
+*/
 LUASOCKET_API int luaopen_socket(lua_State *L)
 {
-	if (luasocket_needs_loading(L)) luaopen_luasocket(L);
+	/*loader mapping is generated with the module 'socket' as index 0*/
+	luasocket_register_modules(L,embedded_modules + 1);/*skip the socket module this function is it*/
 	return luasocket_socket_loader(L);
 }
-LUASOCKET_API int luaopen_mime(lua_State *L)
-{
-	if (luasocket_needs_loading(L)) luaopen_luasocket(L);
-	return luasocket_mime_loader(L);
-}
+
 

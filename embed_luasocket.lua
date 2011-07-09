@@ -29,43 +29,29 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 --]]
---
--- Embed the Lua scripts into src/host/scripts.c as static data buffers.
--- I embed the actual scripts, rather than Lua bytecodes, because the 
--- bytecodes are not portable to different architectures, which causes 
--- issues in Mac OS X Universal builds.
---
 
 	--uses lhf's lstrip
-	local function stripfile(fname)
+	local function lstrip_stripfile(fname)
 		os.execute('./lstrip ' .. fname ..' > '..fname ..'_')
 		local f = io.open(fname..'_')
 		local s = f:read("*a")
 		f:close()
 		os.execute('rm ' ..fname ..'_')
 		
----		s = s:gsub('require%("socket%.core"%)','require"luasocket" ')
---		s = s:gsub('require("socket"])?','require\'luasocket\' ')
-		
-		-- escape double quote marks
 		s = s:gsub("\\", "\\\\")
-		-- escape double quote marks
 		s = s:gsub("\"", "\\\"")
-		
 		s = s:gsub("\n", "\\n")
 		return s
 	end
 
 	--pure lua implementation 
-	--NOTE not fully checked and can not get too aggressive whichout a lexer as it is an ouput format
+	--NOTE not fully checked and can not get too aggressive with out a lexer as it is an ouput format
 	local lua_stripfile = function(fname)
 	
 		local f = io.open(fname)
 		local s = f:read("*a")
 		f:close()
-		
-		--s = s:gsub('require%s*%(?"socket%.core"%s*%)?','require\'luasocket\' ')
-		
+
 		-- strip tabs
 		s = s:gsub("[\t]", "")
 		
@@ -115,6 +101,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		s = s:gsub('%s+~=','~=')
 		s = s:gsub('~=%s+','~=')
 		
+		s = s:gsub('%s+=','=')
+		s = s:gsub('=%s+','=')
+		
+		s = s:gsub('%s+==','==')
+		s = s:gsub('==%s+','==')
+		
 		s = s:gsub('%s+>=','>=')
 		s = s:gsub('>=%s+','>=')
 		
@@ -128,6 +120,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	end
 
 
+						
+						
 	local function writeline(out, s, continues)
 		out:write("\t\"")
 		out:write(s)
@@ -137,7 +131,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 	end
 	
 	
-	local function writefile(out, fname, contents)
+	local function writefile(out, contents)
 		--local max = 1024 --vs limit?
 		local max = 509 
 		--local total_literal_max = 509 --c90 total limit
@@ -163,31 +157,53 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 	end
 
+	local write_embedded_scripts = function(out,scripts,strip_file_function)
+		local w = function(...) out.write(out,...) end
+		w "static const char* luasocket_scripts[] = {\n"						
+		for _,entry in ipairs(scripts) do
+			local file_name = entry.file_name
+			print(file_name)
+			w("\n\t/* " .. file_name .. " */\n")
+			writefile(out, strip_file_function("src/" .. file_name) )
+		end
+	
+		w("\t\n};\n");	
+	end
 
 
-local constant_string_data = function(out)
 
-	out:write(
-[[#include "lua.h"
+local loader_constant_prefix = function(out)
+
+	out:write([[
+#include "lua.h"
 #include "lauxlib.h"
 #include "socket_scripts.h"
 #include "luasocket.h"
 #include "mime.h"
 #include <string.h>
 
+static void preload_error_if_stack_top_is_not_a_table(lua_State* L)
+{
+	if (lua_type(L,-1) != LUA_TTABLE )
+		luaL_error(L, "Lua %d get_preload_table failed to retrieve the preload table. Stack top is %s\n"
+		,LUA_VERSION_NUM,lua_typename(L,-1));
+}
+
 #if LUA_VERSION_NUM < 502
 #	define LUA_OK 0
-static void luaL_preload(L)
-{	
-	lua_getglobal(L,"package");
-	lua_getfield(L, -1, "preload");
-}
-#	define LUA_ERRGCMM 1000
+#	define LUA_ERRGCMM 1000 /*number not returned as an error for this Lua version*/
+	static void get_preload_table(lua_State* L)
+	{	
+		lua_getglobal(L,"package");
+		lua_getfield(L, -1, "preload");
+		preload_error_if_stack_top_is_not_a_table(L);
+	}
 #else
-static void luaL_preload(lua_State* L)
-{
-	lua_getfield(L, LUA_REGISTRYINDEX, "_PRELOAD");
-}
+	static void get_preload_table(lua_State* L)
+	{
+		lua_getfield(L, LUA_REGISTRYINDEX, "_PRELOAD");
+		preload_error_if_stack_top_is_not_a_table(L);
+	}
 #endif
 
 static int load_and_run_buffer(lua_State* L,int char_buff_index,char const* name)
@@ -200,153 +216,152 @@ static int load_and_run_buffer(lua_State* L,int char_buff_index,char const* name
 		return top - lua_gettop(L);
 	}
 	else if(res == LUA_ERRSYNTAX)
-		printf("LUA_ERRSYNTAX %s\n",lua_tostring(L,-1));
+		lua_pushliteral(L,"LUA_ERRSYNTAX");
 	else if(res == LUA_ERRMEM)
-		printf("LUA_ERRMEM %s\n",lua_tostring(L,-1));	
+		lua_pushliteral(L,"LUA_ERRMEM");	
 	else if(res == LUA_ERRGCMM)
-		printf("LUA_ERRGCMM %s\n",lua_tostring(L,-1));
+		lua_pushliteral(L,"LUA_ERRGCMM");
 	
-	return 0;
-}
-
-static int luasocket_needs_loading(lua_State* L)
-{
-	int const top = lua_gettop(L);
-	luaL_preload(L);
-	lua_pushliteral(L,"url.lua");
-	lua_gettable(L, -2);
-	int const needs_loading = lua_type(L, -1);
-	lua_settop(L, top);
-	return needs_loading == LUA_TNIL;
+	lua_pushfstring(L,"ERROR: %s when loading %s :\n\t%s\n",lua_tostring(L,-1),name,lua_tostring(L,-2));
+	return lua_error(L);
 }
 
 ]])
 
 end
 
-
-local write_functions = function(out,scripts)
-	--write helper
-	local p =function(...) out.write(out,...) end
-
-	constant_string_data(out)
-
-	--loader functions
-	for k,v in ipairs(scripts) do
-		local name , _ = v:match('(.-)(%.)') 
-		p(
-		'static int luasocket_' .. name .. '_loader(lua_State* L)\n'..
-		'{\n'
-		)
-			if name == 'socket' then
-				p '\tluaopen_socket_core(L);\n'
-			elseif name == 'mime' then
-				p '\tluaopen_mime_core(L);\n'
-			end
-			
-			p('\treturn load_and_run_buffer(L,' .. k - 1 .. ',"embedded ' .. v ..'");\n'..
-		'}\n')	
-	end
-	
-	local socket_sub_module =
-	{
-		ftp = 1
-		,headers = 1
-		,http = 1
-		,smtp = 1
-		,tp = 1
-		,url = 1
-	}
-	--returns a sub module if required
-	local module_name = function(n)
-		if socket_sub_module[n] then return 'socket.'..n end
-		return n
-	end
-	
-	
-	
+local write_module_data = function(out,embedded_scripts)
+	local w = function(...) out.write(out,...) end
 	--mapping of names to loaders
-	p(
-'static luaL_Reg embedded_modules[] =\n' ..
-'{\n')
-	for k,v in ipairs(scripts) do
-		local name , _ = v:match('(.-)(%.)') 
-		if k ~= 1 then p('\t,') else p('\t') end
-		p('{"' .. module_name(name) .. '",luasocket_' .. name ..'_loader}\n')
+	w([[
+static luaL_Reg embedded_modules[] =
+{
+]]	)
+	for index,entry in ipairs(embedded_scripts) do
+		if index ~= 1 then w('\t,') else w('\t') end
+		w('{"' .. entry.module_name .. '",luasocket_' .. entry.loader_name ..'_loader}\n')
 	end
 	
-	p('\t,{0,0}\n'..
-'};\n')	
+	w([[
+	,{"socket.core",luaopen_socket_core}
+	,{"mime.core",luaopen_mime_core}
+	,{0,0}
+};
 
-	--intailiser which sets the loaders for modules
-	p([[
-LUASOCKET_API int luaopen_luasocket(lua_State *L)
+static void luasocket_register_modules(lua_State *L,luaL_Reg* modules)
 {
 	int top = lua_gettop(L);
-	luaL_preload(L);
+	get_preload_table(L);
 	int loaders = lua_gettop(L);
-	for (int i = 0; embedded_modules[i].name ;++i)
+	for (int i = 0; modules[i].name ;++i)
 	{
-		lua_pushstring(L,embedded_modules[i].name);
-		lua_pushcclosure(L, embedded_modules[i].func, 0);
+		lua_pushstring(L,modules[i].name);
+		lua_pushcclosure(L, modules[i].func, 0);
 		lua_settable(L, loaders);
 	}
 	lua_settop(L, top);
+}	
+
+]]	)
+end
+
+local write_openlib_loaders = function(out,embedded_scripts)
+
+	assert(embedded_scripts[1].file_name =='socket.lua')
+	out:write([[
+LUASOCKET_API int luaopen_luasocket(lua_State *L)
+{
+	luasocket_register_modules(L,embedded_modules);
 	return 0;
 }
-]] )
 
-	--special functions to be used when there are symlinks in place mime.so and socket.so
-	--and a call to require with 'socket' or 'mime' is used yet not require('luasocket')
-	p 'LUASOCKET_API int luaopen_socket(lua_State *L)\n'
-	p '{\n'
-		p '\tif (luasocket_needs_loading(L)) luaopen_luasocket(L);\n'
-		p '\treturn luasocket_socket_loader(L);\n'
-	p '}\n'
+/*
+Called via "require 'socket'" when the library is a shared object or a symlink with the name
+'socket.so' It registers the needed module loaders and runs the socket module returning the results
+*/
+LUASOCKET_API int luaopen_socket(lua_State *L)
+{
+	/*loader mapping is generated with the module 'socket' as index 0*/
+	luasocket_register_modules(L,embedded_modules + 1);/*skip the socket module this function is it*/
+	return luasocket_socket_loader(L);
+}
 
-	p 'LUASOCKET_API int luaopen_mime(lua_State *L)\n'
-	p '{\n'
-		p '\tif (luasocket_needs_loading(L)) luaopen_luasocket(L);\n'
-		p '\treturn luasocket_mime_loader(L);\n'
-	p '}\n\n'
-	
+
+]]	)
 end
 
+local write_loader_functions = function(out,embedded_scripts)
 
-local write_file_data = function(out,scripts)
-	out:write "static const char* luasocket_scripts[] = {\n"
-		
-	for i,fn in ipairs(scripts) do
-		print(fn)
-		out:write("\n\t/* " .. fn .. " */\n")
-		local s = stripfile("src/" .. fn)			
-		writefile(out, fn, s)
+	loader_constant_prefix(out)
+	
+	local w = function(...) out.write(out,...) end
+	--loader functions
+	for index,entry in ipairs(embedded_scripts) do
+		w(
+'static int luasocket_' .. entry.loader_name .. '_loader(lua_State* L)\n'..
+'{\n'..
+	'\treturn load_and_run_buffer(L,' .. index - 1 .. ',"embedded ' .. entry.file_name ..'");\n'..
+'}\n'	)
 	end
 	
-	out:write("\t\n};\n");	
+	write_module_data(out,embedded_scripts)
+	write_openlib_loaders(out,embedded_scripts)
+
 end
+
+
+
 
 
 function doembed()
-	local scripts =
-	{
-		'socket.lua',
-		'mime.lua',
-		'ltn12.lua',
-		'ftp.lua',
-		'headers.lua',
-		'http.lua',
-		'smtp.lua',
-		'tp.lua',
-		'url.lua'
+
+	local header = io.open('src/socket_scripts.h','w+b')
+	header:write([[
+#ifndef LUASOCKET_SCRIPTS_H_
+#	define LUASOCKET_SCRIPTS_H_
+
+struct lua_State;
+int luaopen_luasocket(struct lua_State *L);
+
+#endif
+]]	)
+	header:close()
+
+	local file_module_loader = function(f,m) 
+		local loader_name , _ = f:match('(.-)(%.)') 
+		return {['file_name']= f,['module_name']= m,['loader_name'] = loader_name} 
+	end
+
+	local embedded_scripts =
+	{	
+		[1] = file_module_loader('socket.lua','socket'),
+		[2] = file_module_loader('mime.lua','mime'),
+		[3] = file_module_loader('ltn12.lua','ltn12'),
+		[4] = file_module_loader('ftp.lua','socket.ftp'),
+		[5] = file_module_loader('headers.lua','socket.headers'),
+		[6] = file_module_loader('http.lua','socket.http'),
+		[7] = file_module_loader('smtp.lua','socket.smtp'),
+		[8] = file_module_loader('tp.lua','socket.tp'),
+		[9] = file_module_loader('url.lua','socket.url'),
 	}
-		
+	
+	--[[
+	The module socket can be special in that it registers the module loaders
+	when the library is a shared object or a symlink named "socket.so".
+	In this instance it does not register the socket loader as one is found
+	using symbol lookup in the so.
+	This is an index requirement in the generated file
+	--]]
+	assert(embedded_scripts[1].module_name =='socket')
+	
 	local out = io.open("src/socket_scripts.c", "w+b")
 		out:write "/* This file is generated, edits to it will not persist if regenerated */ \n\n"
-		write_file_data(out,scripts)
-		write_functions(out,scripts)
+		local stripfile = lstrip_stripfile
+							--lua_stripfile
+							
+		write_embedded_scripts(out,embedded_scripts,stripfile)
+		write_loader_functions(out,embedded_scripts)
 	out:close()
 end
 
 doembed()
-

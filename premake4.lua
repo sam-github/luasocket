@@ -1,15 +1,19 @@
 
 local luasocket_version = '2.1.1'
 
-local macosx_dylib = function(version)
+local macosx_dylib = function(lua_version)
 	configuration {'macosx','sharedlib'}
-			prebuildcommands('rm ./libluasocket.'..version..'.dylib; rm ./luasocket.so')
-			postbuildcommands('ln -s ./lib/libluasocket.'..version..'-' ..luasocket_version ..'.dylib ./libluasocket.'..version..'.dylib;'
-								..'ln -s ./libluasocket.'..version..'.dylib ./luasocket.so')
+			prebuildcommands('rm ./libluasocket.'..lua_version..'.dylib; rm ./luasocket.so')
+			postbuildcommands('ln -s ./lib/libluasocket.'..lua_version..'-' ..luasocket_version ..'.dylib ./libluasocket.'..lua_version..'.dylib;'
+								..'ln -s ./libluasocket.'..lua_version..'.dylib ./luasocket.so')
 			linkoptions {'-undefined dynamic_lookup'}
 			buildoptions{'-fpic -fno-common -fvisibility=hidden'}
 	configuration '*'
 end
+
+local lua_includes = '~/Documents/projects/lua_env/luaenv/lua_versions/lua_include/'
+local include_51_dir = lua_includes .. 'lua51/'
+local include_52_dir = lua_includes .. 'lua52/'
 
 solution 'lua_socket'
 	configurations{'Debug','Release'}
@@ -63,18 +67,67 @@ solution 'lua_socket'
 			"\\\"MIME_API=__attribute__((visibility(\\\\\\\"default\\\\\\\")))\\\"",
 		}
 	
-	project 'lua51_socket'
+	project 'lua51_shared_socket'
 		kind 'SharedLib'
-		includedirs{'~/Documents/projects/lua_env/luaenv/lua_versions/lua_include/lua51/'}
+		includedirs{ include_51_dir }
 		targetname ('luasocket.51-' ..luasocket_version)
 		targetdir './lib'	
 		macosx_dylib '51'
 			
-	project 'lua52_socket'
+	project 'lua52_shared_socket'
 		kind 'SharedLib'
 		defines 'LUA_COMPAT_MODULE'
-		includedirs{'~/Documents/projects/lua_env/luaenv/lua_versions/lua_include/lua52/'}
+		includedirs{ include_52_dir }
 		targetname ('luasocket.52-' ..luasocket_version)
 		targetdir './lib'
 		macosx_dylib '52'
 
+	project 'lua51_static_socket'
+		kind 'StaticLib'
+		defines 'LUA_COMPAT_MODULE'
+		includedirs{ include_51_dir }
+		targetname ('luasocket.51-' ..luasocket_version)
+		targetdir './lib'
+		
+	project 'lua52_static_socket'
+		kind 'StaticLib'
+		defines 'LUA_COMPAT_MODULE'
+		includedirs{ include_52_dir }
+		targetname ('luasocket.52-' ..luasocket_version)
+		targetdir './lib'
+
+solution 'lua_socket_test'
+	configurations{'Debug','Release'}
+	kind 'ConsoleApp'
+	language 'C'	
+	flags 'ExtraWarnings'
+	targetdir './lib/'
+	files './test/test_lua_socket.c'
+	
+	configuration 'Debug'
+		flags 'Symbols'
+		
+	configuration 'Release'
+		flags 'Optimise'
+
+	configuration{'macosx or linux'}
+		buildoptions '-pedantic -Wshadow -Wextra -Wimplicit'
+		
+	configuration 'macosx'
+		buildoptions '-mmacosx-version-min=10.1'
+
+local lua_lib_dir = '/Users/apple/Documents/projects/lua_env/luaenv/lua_versions/lua_lib/'
+
+	project 'lua52_static_test'
+		defines 'LUA_COMPAT_MODULE'
+		includedirs{ include_52_dir,'./src' }
+		targetname ('luasocket_test.52-' ..luasocket_version )
+		linkoptions { lua_lib_dir .. 'lua52/liblua.a' }
+		links 'lua52_static_socket'
+		
+	project 'lua51_static_test'
+		kind 'ConsoleApp'
+		includedirs{ include_51_dir,'./src '}
+		targetname ('luasocket_test.51-' ..luasocket_version )
+		linkoptions { lua_lib_dir .. 'lua51/liblua.a' }
+		links 'lua51_static_socket'
