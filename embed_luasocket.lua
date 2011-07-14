@@ -1,34 +1,3 @@
---lifted from premake4
---[[
-Copyright (c) 2003-2011 Jason Perkins and individual contributors.
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-  1. Redistributions of source code must retain the above copyright notice,
-     this list of conditions and the following disclaimer.
-
-  2. Redistributions in binary form must reproduce the above copyright notice,
-     this list of conditions and the following disclaimer in the documentation
-     and/or other materials provided with the distribution.
-
-  3. Neither the name of the Premake nor the names of its contributors may be 
-     used to endorse or promote products derived from this software without
-     specific prior written permission.
-	 
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
---]]
 
 	--uses lhf's lstrip
 	local function lstrip_stripfile(fname)
@@ -38,139 +7,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 		f:close()
 		os.execute('rm ' ..fname ..'_')
 		
+		t = {s:byte(1,-1)}
+		
 		s = s:gsub("\\", "\\\\")
 		s = s:gsub("\"", "\\\"")
 		s = s:gsub("\n", "\\n")
-		return s
-	end
-
-	--pure lua implementation 
-	--NOTE not fully checked and can not get too aggressive with out a lexer as it is an ouput format
-	local lua_stripfile = function(fname)
-	
-		local f = io.open(fname)
-		local s = f:read("*a")
-		f:close()
-
-		-- strip tabs
-		s = s:gsub("[\t]", "")
 		
-		-- strip any CRs
-		s = s:gsub("[\r]", "")
-		
-		-- strip out comments
-		--s = s:gsub("\n%-%-[^\n]*", "")
-		
-		-- escape backslashes
-		s = s:gsub("\\", "\\\\")
-
-		-- strip out leading comments
-		--s = s:gsub("^%-%-\n", "")
-		s = s:gsub("%-%-+.-\n+", " ")
-		
-		-- strip duplicate line feeds
-		s = s:gsub("\n+", "\n")
-		--s = s:gsub("\n+", "\\n")
-		-- escape line feeds
-		s = s:gsub("\n", "\\n")
---		s = s:gsub('\n',' ')
-		
-		-- escape double quote marks
-		s = s:gsub("\"", "\\\"")
-		--s = s:gsub("\"", "'")
-		
-		s = s:gsub('%s+=','=')
-		s = s:gsub('=%s+','=')
-		
-		s = s:gsub('if%s+%(','if(')
-		s = s:gsub('%)%s+then',')then')
-		s = s:gsub('for%s+%(','for(')
-		s = s:gsub('%)%s+end',')end')
-		s = s:gsub('%)%s+else',')else')
-		s = s:gsub('%)%s+local',')local')
-		
-		s = s:gsub('%s+or%s+{',' or{')
-		s = s:gsub('{%s+','{')
-		s = s:gsub('%s+}','}')
-		
-		s = s:gsub('{%s+%[','{[')
-		s = s:gsub(',%s+%[',',[')
-		
-		s = s:gsub("%s+%.%.%s+", "..")
-		
-		s = s:gsub('%s+~=','~=')
-		s = s:gsub('~=%s+','~=')
-		
-		s = s:gsub('%s+=','=')
-		s = s:gsub('=%s+','=')
-		
-		s = s:gsub('%s+==','==')
-		s = s:gsub('==%s+','==')
-		
-		s = s:gsub('%s+>=','>=')
-		s = s:gsub('>=%s+','>=')
-		
-		s = s:gsub("%s%s+", " ")
-
---smtp uses a string which contains ' , '		
---		s = s:gsub('%s+,',',')
---		s = s:gsub(',%s+',',') 
-		 		
-		return s
-	end
-
-
-						
-						
-	local function writeline(out, s, continues)
-		out:write("\t\"")
-		out:write(s)
-		local towrite = "\",\n"
-		if continues then towrite = "\"\n" end
-		out:write(towrite)
+		return s, t
 	end
 	
-	
-	local function writefile(out, contents)
-		--local max = 1024 --vs limit?
-		local max = 509 
-		--local total_literal_max = 509 --c90 total limit
-		--local total_literal_max = 4095 --c99 total limit
-
-
-		-- break up large strings to fit in Visual Studio's string length limit		
-		local start = 1
-		local len = contents:len()
-		while start <= len do
-			local n = len - start
-			if n > max then n = max end
-			local finish = start + n
-
-			-- make sure I don't cut an escape sequence
-			while contents:sub(finish, finish) == "\\" do
-				finish = finish - 1
-			end			
-
-			writeline(out, contents:sub(start, finish), finish < len)
-			start = finish + 1
-		end		
-
+	local function writefilebytes(out,bytes,last)
+		for k,v in ipairs(bytes) do
+			out:write(v)
+			if k == #bytes and last == true then return
+			else out:write(',') end
+		end
 	end
-
-	local write_embedded_scripts = function(out,scripts,strip_file_function)
+	
+	local write_embedded_scripts_ = function(out,scripts,strip_file_function)
 		local w = function(...) out.write(out,...) end
-		w "static const char* luasocket_scripts[] = {\n"						
-		for _,entry in ipairs(scripts) do
+		local sizes ={}
+		local last_entry = #scripts
+		w "static const char luasocket_scripts[] = {\n"						
+		for index,entry in ipairs(scripts) do
 			local file_name = entry.file_name
 			print(file_name)
 			w("\n\t/* " .. file_name .. " */\n")
-			writefile(out, strip_file_function("src/" .. file_name) )
+			local _, t = strip_file_function("src/" .. file_name)
+			local buffer_index = 0
+			if index ~= 1 then 
+				buffer_index = sizes[index-1].buffer_index + sizes[index-1].size
+			end
+			sizes[index] = {size = #t, ['buffer_index'] = buffer_index}
+			writefilebytes(out, t, index == last_entry )
 		end
 	
 		w("\t\n};\n");	
+
+		w('enum script_sizes {\n')		
+		for i,entry in ipairs(sizes) do
+			w('\t' .. scripts[i].loader_name ..'_size = ' .. entry.size)
+			if i ~= #sizes then w', ' end
+			w'\n'
+		end
+		w("\t\n};\n");
+		
+		w('enum script_indexes {\n')		
+		for i,entry in ipairs(sizes) do
+			w('\t' .. scripts[i].loader_name ..'_index = ' .. entry.buffer_index)
+			if i ~= #sizes then w', ' end
+			w'\n'
+		end
+		w("\t\n};\n");
+		
 	end
-
-
+	
 
 local loader_constant_prefix = function(out)
 
@@ -206,10 +97,10 @@ static void preload_error_if_stack_top_is_not_a_table(lua_State* L)
 	}
 #endif
 
-static int load_and_run_buffer(lua_State* L,int char_buff_index,char const* name)
+static int load_and_run_buffer(lua_State* L,int char_buff_index,size_t buff_size,char const* name)
 {
 	int const top = lua_gettop(L);
-	int const res = luaL_loadbuffer(L,luasocket_scripts[char_buff_index],strlen(luasocket_scripts[char_buff_index]),name);
+	int const res = luaL_loadbuffer(L,luasocket_scripts + char_buff_index,buff_size,name);
 	if (res == LUA_OK)
 	{
 		lua_pcall(L, 0, LUA_MULTRET, 0);
@@ -290,7 +181,9 @@ LUASOCKET_API int luaopen_socket(lua_State *L)
 ]]	)
 end
 
-local write_loader_functions = function(out,embedded_scripts)
+
+
+local write_loader_functions__ = function(out,embedded_scripts)
 
 	loader_constant_prefix(out)
 	
@@ -300,7 +193,7 @@ local write_loader_functions = function(out,embedded_scripts)
 		w(
 'static int luasocket_' .. entry.loader_name .. '_loader(lua_State* L)\n'..
 '{\n'..
-	'\treturn load_and_run_buffer(L,' .. index - 1 .. ',"embedded ' .. entry.file_name ..'");\n'..
+	'\treturn load_and_run_buffer(L,' .. entry.loader_name .. '_index' .. ','.. entry.loader_name ..'_size' .. ',"embedded ' .. entry.file_name ..'");\n'..
 '}\n'	)
 	end
 	
@@ -308,7 +201,6 @@ local write_loader_functions = function(out,embedded_scripts)
 	write_openlib_loaders(out,embedded_scripts)
 
 end
-
 
 
 
@@ -359,9 +251,11 @@ int luaopen_luasocket(struct lua_State *L);
 		local stripfile = lstrip_stripfile
 							--lua_stripfile
 							
-		write_embedded_scripts(out,embedded_scripts,stripfile)
-		write_loader_functions(out,embedded_scripts)
+		write_embedded_scripts_(out,embedded_scripts,stripfile)
+		write_loader_functions__(out,embedded_scripts)
+		
 	out:close()
 end
 
 doembed()
+
