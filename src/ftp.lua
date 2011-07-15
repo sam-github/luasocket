@@ -16,27 +16,27 @@ local socket = require("socket")
 local url = require("socket.url")
 local tp = require("socket.tp")
 local ltn12 = require("ltn12")
-module("socket.ftp")
+local M = {}
 
 -----------------------------------------------------------------------------
 -- Program constants
 -----------------------------------------------------------------------------
 -- timeout in seconds before the program gives up on a connection
-TIMEOUT = 60
+M.TIMEOUT = 60
 -- default port for ftp service
-PORT = 21
+M.PORT = 21
 -- this is the default anonymous password. used when no password is
 -- provided in url. should be changed to your e-mail.
-USER = "ftp"
-PASSWORD = "anonymous@anonymous.org"
+M.USER = "ftp"
+M.PASSWORD = "anonymous@anonymous.org"
 
 -----------------------------------------------------------------------------
 -- Low level FTP API
 -----------------------------------------------------------------------------
 local metat = { __index = {} }
 
-function open(server, port, create)
-    local tp = socket.try(tp.connect(server, port or PORT, TIMEOUT, create))
+function M.open(server, port, create)
+    local tp = socket.try(tp.connect(server, port or M.PORT, M.TIMEOUT, create))
     local f = base.setmetatable({ tp = tp }, metat)
     -- make sure everything gets closed in an exception
     f.try = socket.newtry(function() f:close() end)
@@ -44,22 +44,22 @@ function open(server, port, create)
 end
 
 function metat.__index:portconnect()
-    self.try(self.server:settimeout(TIMEOUT))
+    self.try(self.server:settimeout(M.TIMEOUT))
     self.data = self.try(self.server:accept())
-    self.try(self.data:settimeout(TIMEOUT))
+    self.try(self.data:settimeout(M.TIMEOUT))
 end
 
 function metat.__index:pasvconnect()
     self.data = self.try(socket.tcp())
-    self.try(self.data:settimeout(TIMEOUT))
+    self.try(self.data:settimeout(M.TIMEOUT))
     self.try(self.data:connect(self.pasvt.ip, self.pasvt.port))
 end
 
 function metat.__index:login(user, password)
-    self.try(self.tp:command("user", user or USER))
+    self.try(self.tp:command("user", user or M.USER))
     local code, reply = self.try(self.tp:check{"2..", 331})
     if code == 331 then
-        self.try(self.tp:command("pass", password or PASSWORD))
+        self.try(self.tp:command("pass", password or M.PASSWORD))
         self.try(self.tp:check("2.."))
     end
     return 1
@@ -88,7 +88,7 @@ function metat.__index:port(ip, port)
         ip, port = self.try(self.tp:getcontrol():getsockname())
         self.server = self.try(socket.bind(ip, 0))
         ip, port = self.try(self.server:getsockname())
-        self.try(self.server:settimeout(TIMEOUT))
+        self.try(self.server:settimeout(M.TIMEOUT))
     end
     local pl = math.mod(port, 256)
     local ph = (port - pl)/256
@@ -261,7 +261,7 @@ local function sget(u)
     return table.concat(t)
 end
 
-command = socket.protect(function(cmdt)
+M.command = socket.protect(function(cmdt)
     cmdt = override(cmdt)
     socket.try(cmdt.host, "missing hostname")
     socket.try(cmdt.command, "missing command")
@@ -274,8 +274,9 @@ command = socket.protect(function(cmdt)
     return f:close()
 end)
 
-get = socket.protect(function(gett)
+M.get = socket.protect(function(gett)
     if base.type(gett) == "string" then return sget(gett)
     else return tget(gett) end
 end)
 
+return M

@@ -4,9 +4,9 @@
 -- Author: Diego Nehab
 -- RCS ID: $Id$
 -----------------------------------------------------------------------------
-module("socket.headers")
+local M ={}
 
-canonic = {
+M.canonic = {
     ["accept"] = "Accept",
     ["accept-charset"] = "Accept-Charset",
     ["accept-encoding"] = "Accept-Encoding",
@@ -98,3 +98,5 @@ canonic = {
     ["www-authenticate"] = "WWW-Authenticate",
     ["x-mailer"] = "X-Mailer",
 }
+
+return M

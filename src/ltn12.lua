@@ -11,16 +11,16 @@
 local string = require("string")
 local table = require("table")
 local base = _G
-module("ltn12")
+local M = {}
 
-filter = {}
-source = {}
-sink = {}
-pump = {}
+M.filter = {}
+M.source = {}
+M.sink = {}
+M.pump = {}
 
 -- 2048 seems to be better in windows...
-BLOCKSIZE = 2048
-_VERSION = "LTN12 1.0.1"
+M.BLOCKSIZE = 2048
+M._VERSION = "LTN12 1.0.1"
 
 -----------------------------------------------------------------------------
 -- Filter stuff
@@ -89,7 +89,7 @@ end
 function source.file(handle, io_err)
     if handle then
         return function()
-            local chunk = handle:read(BLOCKSIZE)
+            local chunk = handle:read(M.BLOCKSIZE)
             if not chunk then handle:close() end
             return chunk
         end
@@ -112,8 +112,8 @@ function source.string(s)
     if s then
         local i = 1
         return function()
-            local chunk = string.sub(s, i, i+BLOCKSIZE-1)
-            i = i + BLOCKSIZE
+            local chunk = string.sub(s, i, i+M.BLOCKSIZE-1)
+            i = i + M.BLOCKSIZE
             if chunk ~= "" then return chunk
             else return nil end
         end
@@ -289,4 +289,6 @@ function pump.all(src, snk, step)
         end
     end
 end
+
+return M
 

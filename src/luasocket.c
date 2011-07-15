@@ -87,7 +87,12 @@ static int global_unload(lua_State *L) {
 static int base_open(lua_State *L) {
     if (socket_open()) {
         /* export functions (and leave namespace table on top of stack) */
+#if LUA_VERSION_NUM == 502
+		lua_createtable(L,0,0);
+		luaL_setfuncs(L,func,0);
+#else
         luaL_openlib(L, "socket", func, 0);
+#endif
 #ifdef LUASOCKET_DEBUG
         lua_pushstring(L, "_DEBUG");
         lua_pushboolean(L, 1);

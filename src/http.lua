@@ -16,17 +16,16 @@ local string = require("string")
 local headers = require("socket.headers")
 local base = _G
 local table = require("table")
-module("socket.http")
-
+local M = {}
 -----------------------------------------------------------------------------
 -- Program constants
 -----------------------------------------------------------------------------
 -- connection timeout in seconds
-TIMEOUT = 60
+M.TIMEOUT = 60
 -- default port for document retrieval
-PORT = 80
+M.PORT = 80
 -- user agent field sent in request
-USERAGENT = socket._VERSION
+M.USERAGENT = socket._VERSION
 
 -----------------------------------------------------------------------------
 -- Reads MIME headers from a connection, unfolding where needed
@@ -106,15 +105,15 @@ end
 -----------------------------------------------------------------------------
 local metat = { __index = {} }
 
-function open(host, port, create)
+function M.open(host, port, create)
     -- create socket with user connect function, or with default
     local c = socket.try((create or socket.tcp)())
     local h = base.setmetatable({ c = c }, metat)
     -- create finalized try
     h.try = socket.newtry(function() h:close() end)
     -- set timeout before connecting
-    h.try(c:settimeout(TIMEOUT))
-    h.try(c:connect(host, port or PORT))
+    h.try(c:settimeout(M.TIMEOUT))
+    h.try(c:connect(host, port or M.PORT))
     -- here everything worked
     return h
 end
@@ -186,7 +185,7 @@ end
 local function adjusturi(reqt)
     local u = reqt
     -- if there is a proxy, we need the full url. otherwise, just a part.
-    if not reqt.proxy and not PROXY then
+    if not reqt.proxy and not M.PROXY then
         u = {
            path = socket.try(reqt.path, "invalid path 'nil'"),
            params = reqt.params,
@@ -198,7 +197,7 @@ local function adjusturi(reqt)
 end
 
 local function adjustproxy(reqt)
-    local proxy = reqt.proxy or PROXY
+    local proxy = reqt.proxy or M.PROXY
     if proxy then
         proxy = url.parse(proxy)
         return proxy.host, proxy.port or 3128
@@ -210,7 +209,7 @@ end
 local function adjustheaders(reqt)
     -- default headers
     local lower = {
-        ["user-agent"] = USERAGENT,
+        ["user-agent"] = M.USERAGENT,
         ["host"] = reqt.host,
         ["connection"] = "close, TE",
         ["te"] = "trailers"
@@ -230,7 +229,7 @@ end
 -- default url parts
 local default = {
     host = "",
-    port = PORT,
+    port = M.PORT,
     path ="/",
     scheme = "http"
 }
@@ -271,7 +270,7 @@ end
 -- forward declarations
 local trequest, tredirect
 
-function tredirect(reqt, location)
+function M.tredirect(reqt, location)
     local result, code, headers, status = trequest {
         -- the RFC says the redirect URL has to be absolute, but some
         -- servers do not respect that
@@ -289,7 +288,7 @@ function tredirect(reqt, location)
     return result, code, headers, status
 end
 
-function trequest(reqt)
+function M.trequest(reqt)
     -- we loop until we get what we want, or
     -- until we are sure there is no way to get it
     local nreqt = adjustrequest(reqt)
@@ -342,11 +341,13 @@ local function srequest(u, b)
         }
         reqt.method = "POST"
     end
-    local code, headers, status = socket.skip(1, trequest(reqt))
+    local code, headers, status = socket.skip(1, M.trequest(reqt))
     return table.concat(t), code, headers, status
 end
 
-request = socket.protect(function(reqt, body)
+M.request = socket.protect(function(reqt, body)
     if base.type(reqt) == "string" then return srequest(reqt, body)
-    else return trequest(reqt) end
+    else return M.trequest(reqt) end
 end)
+
+return M

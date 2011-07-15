@@ -24,7 +24,7 @@
 		end
 	end
 	
-	local write_embedded_scripts_ = function(out,scripts,strip_file_function)
+	local write_embedded_scripts = function(out,scripts,strip_file_function)
 		local w = function(...) out.write(out,...) end
 		local sizes ={}
 		local last_entry = #scripts
@@ -104,7 +104,7 @@ static int load_and_run_buffer(lua_State* L,int char_buff_index,size_t buff_size
 	if (res == LUA_OK)
 	{
 		lua_pcall(L, 0, LUA_MULTRET, 0);
-		return top - lua_gettop(L);
+		return lua_gettop(L) - top;
 	}
 	else if(res == LUA_ERRSYNTAX)
 		lua_pushliteral(L,"LUA_ERRSYNTAX");
@@ -183,7 +183,7 @@ end
 
 
 
-local write_loader_functions__ = function(out,embedded_scripts)
+local write_loader_functions = function(out,embedded_scripts)
 
 	loader_constant_prefix(out)
 	
@@ -249,10 +249,9 @@ int luaopen_luasocket(struct lua_State *L);
 	local out = io.open("src/socket_scripts.c", "w+b")
 		out:write "/* This file is generated, edits to it will not persist if regenerated */ \n\n"
 		local stripfile = lstrip_stripfile
-							--lua_stripfile
 							
-		write_embedded_scripts_(out,embedded_scripts,stripfile)
-		write_loader_functions__(out,embedded_scripts)
+		write_embedded_scripts(out,embedded_scripts,stripfile)
+		write_loader_functions(out,embedded_scripts)
 		
 	out:close()
 end

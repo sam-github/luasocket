@@ -13,12 +13,12 @@ local ltn12 = require("ltn12")
 local mime = require("mime.core")
 local io = require("io")
 local string = require("string")
-module("mime")
+local M = mime
 
 -- encode, decode and wrap algorithm tables
-encodet = {}
-decodet = {}
-wrapt = {}
+M.encodet = {}
+M.decodet = {}
+M.wrapt = {}
 
 -- creates a function that chooses a filter by name from a given table
 local function choose(table)
@@ -34,21 +34,21 @@ local function choose(table)
 end
 
 -- define the encoding filters
-encodet['base64'] = function()
+M.encodet['base64'] = function()
     return ltn12.filter.cycle(b64, "")
 end
 
-encodet['quoted-printable'] = function(mode)
+M.encodet['quoted-printable'] = function(mode)
     return ltn12.filter.cycle(qp, "",
         (mode == "binary") and "=0D=0A" or "\r\n")
 end
 
 -- define the decoding filters
-decodet['base64'] = function()
+M.decodet['base64'] = function()
     return ltn12.filter.cycle(unb64, "")
 end
 
-decodet['quoted-printable'] = function()
+M.decodet['quoted-printable'] = function()
     return ltn12.filter.cycle(unqp, "")
 end
 
@@ -60,28 +60,30 @@ local function format(chunk)
 end
 
 -- define the line-wrap filters
-wrapt['text'] = function(length)
+M.wrapt['text'] = function(length)
     length = length or 76
     return ltn12.filter.cycle(wrp, length, length)
 end
-wrapt['base64'] = wrapt['text']
-wrapt['default'] = wrapt['text']
+M.wrapt['base64'] = M.wrapt['text']
+M.wrapt['default'] = M.wrapt['text']
 
-wrapt['quoted-printable'] = function()
+M.wrapt['quoted-printable'] = function()
     return ltn12.filter.cycle(qpwrp, 76, 76)
 end
 
 -- function that choose the encoding, decoding or wrap algorithm
-encode = choose(encodet)
-decode = choose(decodet)
-wrap = choose(wrapt)
+M.encode = choose(encodet)
+M.decode = choose(decodet)
+M.wrap = choose(wrapt)
 
 -- define the end-of-line normalization filter
-function normalize(marker)
+function M.normalize(marker)
     return ltn12.filter.cycle(eol, 0, marker)
 end
 
 -- high level stuffing filter
-function stuff()
+function M.stuff()
     return ltn12.filter.cycle(dot, 2)
 end
+
+return M

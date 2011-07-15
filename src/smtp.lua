@@ -18,22 +18,21 @@ local tp = require("socket.tp")
 local ltn12 = require("ltn12")
 local headers = require("socket.headers")
 local mime = require("mime")
-module("socket.smtp")
-
+local M = {}
 -----------------------------------------------------------------------------
 -- Program constants
 -----------------------------------------------------------------------------
 -- timeout for connection
-TIMEOUT = 60
+M.TIMEOUT = 60
 -- default server used to send e-mails
-SERVER = "localhost"
+M.SERVER = "localhost"
 -- default port
-PORT = 25
+M.PORT = 25
 -- domain used in HELO command and default sendmail
 -- If we are under a CGI, try to get from environment
-DOMAIN = os.getenv("SERVER_NAME") or "localhost"
+M.DOMAIN = os.getenv("SERVER_NAME") or "localhost"
 -- default time zone (means we don't know)
-ZONE = "-0000"
+M.ZONE = "-0000"
 
 ---------------------------------------------------------------------------
 -- Low level SMTP API
@@ -42,7 +41,7 @@ local metat = { __index = {} }
 
 function metat.__index:greet(domain)
     self.try(self.tp:check("2.."))
-    self.try(self.tp:command("EHLO", domain or DOMAIN))
+    self.try(self.tp:command("EHLO", domain or M.DOMAIN))
     return socket.skip(1, self.try(self.tp:check("2..")))
 end
 
@@ -112,9 +111,9 @@ function metat.__index:send(mailt)
     self:data(ltn12.source.chain(mailt.source, mime.stuff()), mailt.step)
 end
 
-function open(server, port, create)
-    local tp = socket.try(tp.connect(server or SERVER, port or PORT,
-        TIMEOUT, create))
+function M.open(server, port, create)
+    local tp = socket.try(tp.connect(server or M.SERVER, port or M.PORT,
+        M.TIMEOUT, create))
     local s = base.setmetatable({tp = tp}, metat)
     -- make sure tp is closed if we get an exception
     s.try = socket.newtry(function()
@@ -212,7 +211,7 @@ local function send_string(mesgt)
 end
 
 -- message source
-function send_message(mesgt)
+function M.send_message(mesgt)
     if base.type(mesgt.body) == "table" then send_multipart(mesgt)
     elseif base.type(mesgt.body) == "function" then send_source(mesgt)
     else send_string(mesgt) end
@@ -222,17 +221,17 @@ end
 local function adjust_headers(mesgt)
     local lower = lower_headers(mesgt.headers)
     lower["date"] = lower["date"] or
-        os.date("!%a, %d %b %Y %H:%M:%S ") .. (mesgt.zone or ZONE)
+        os.date("!%a, %d %b %Y %H:%M:%S ") .. (mesgt.zone or M.ZONE)
     lower["x-mailer"] = lower["x-mailer"] or socket._VERSION
     -- this can't be overriden
     lower["mime-version"] = "1.0"
     return lower
 end
 
-function message(mesgt)
+function M.message(mesgt)
     mesgt.headers = adjust_headers(mesgt)
     -- create and return message source
-    local co = coroutine.create(function() send_message(mesgt) end)
+    local co = coroutine.create(function() M.send_message(mesgt) end)
     return function()
         local ret, a, b = coroutine.resume(co)
         if ret then return a, b
@@ -243,11 +242,13 @@ end
 ---------------------------------------------------------------------------
 -- High level SMTP API
 -----------------------------------------------------------------------------
-send = socket.protect(function(mailt)
-    local s = open(mailt.server, mailt.port, mailt.create)
+M.send = socket.protect(function(mailt)
+    local s = M.open(mailt.server, mailt.port, mailt.create)
     local ext = s:greet(mailt.domain)
     s:auth(mailt.user, mailt.password, ext)
     s:send(mailt)
     s:quit()
     return s:close()
 end)
+
+return M

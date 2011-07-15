@@ -109,7 +109,11 @@ int udp_open(lua_State *L)
     auxiliar_add2group(L, "udp{connected}",   "select{able}");
     auxiliar_add2group(L, "udp{unconnected}", "select{able}");
     /* define library functions */
+#if LUA_VERSION_NUM == 502
+	luaL_setfuncs(L,func,0);
+#else
     luaL_openlib(L, NULL, func, 0);
+#endif
     return 0;
 }
 

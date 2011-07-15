@@ -1,8 +1,8 @@
-socket = require("socket");
+socket = require("socket");--[[required to be global for tests--]]
 host = host or "localhost";
 port = port or "8383";
-server = assert(socket.bind(host, port));
-ack = "\n";
+server = assert(socket.bind(host, port));--[[required to be global for tests--]]
+local ack = "\n";
 
 local lua_load_func = loadstring
 if _VERSION == 'Lua 5.2' then
