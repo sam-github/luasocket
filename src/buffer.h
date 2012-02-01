@@ -14,8 +14,6 @@
 *
 * The module is built on top of the I/O abstraction defined in io.h and the
 * timeout management is done with the timeout.h interface.
-*
-* RCS ID: $Id: buffer.h,v 1.12 2005/10/07 04:40:59 diego Exp $
 \*=========================================================================*/
 #include "lua.h"
 

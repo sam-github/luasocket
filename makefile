@@ -22,6 +22,7 @@ TO_SOCKET_SHARE:= \
 	url.lua \
 	tp.lua \
 	ftp.lua \
+	headers.lua \
 	smtp.lua
 
 TO_TOP_SHARE:= \
