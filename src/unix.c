@@ -2,7 +2,7 @@
 * Unix domain socket 
 * LuaSocket toolkit
 *
-* RCS ID: $Id: unix.c,v 1.13 2006/03/13 07:16:39 diego Exp $
+* RCS ID: $Id: unix.c,v 1.14 2009/05/27 09:31:35 diego Exp $
 \*=========================================================================*/
 #include <string.h> 
 
@@ -63,10 +63,10 @@ static luaL_reg un[] = {
 };
 
 /* socket option handlers */
-static t_opt opt[] = {
-    {"keepalive",   opt_keepalive},
-    {"reuseaddr",   opt_reuseaddr},
-    {"linger",      opt_linger},
+static t_opt optset[] = {
+    {"keepalive",   opt_set_keepalive},
+    {"reuseaddr",   opt_set_reuseaddr},
+    {"linger",      opt_set_linger},
     {NULL,          NULL}
 };
 
@@ -128,7 +128,7 @@ static int meth_setstats(lua_State *L) {
 \*-------------------------------------------------------------------------*/
 static int meth_setoption(lua_State *L) {
     p_unix un = (p_unix) auxiliar_checkgroup(L, "unix{any}", 1);
-    return opt_meth_setoption(L, opt, &un->sock);
+    return opt_meth_setoption(L, optset, &un->sock);
 }
 
 /*-------------------------------------------------------------------------*\

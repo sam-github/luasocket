@@ -2,7 +2,7 @@
 * Timeout management functions
 * LuaSocket toolkit
 *
-* RCS ID: $Id: timeout.c,v 1.30 2005/10/07 04:40:59 diego Exp $
+* RCS ID: $Id: timeout.c,v 1.31 2009/05/27 09:31:35 diego Exp $
 \*=========================================================================*/
 #include <stdio.h>
 #include <limits.h>

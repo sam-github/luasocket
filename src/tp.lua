@@ -2,7 +2,7 @@
 -- Unified SMTP/FTP subsystem
 -- LuaSocket toolkit.
 -- Author: Diego Nehab
--- RCS ID: $Id: tp.lua,v 1.22 2006/03/14 09:04:15 diego Exp $
+-- RCS ID: $Id: tp.lua,v 1.23 2009/05/27 09:31:35 diego Exp $
 -----------------------------------------------------------------------------
 
 -----------------------------------------------------------------------------
@@ -106,7 +106,7 @@ end
 -- closes the underlying c
 function metat.__index:close()
     self.c:close()
-	return 1
+    return 1
 end
 
 -- connect with server and return c object

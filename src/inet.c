@@ -213,7 +213,7 @@ const char *inet_tryconnect(p_socket ps, const char *address,
     memset(&remote, 0, sizeof(remote));
     remote.sin_family = AF_INET;
     remote.sin_port = htons(port);
-	if (strcmp(address, "*")) {
+    if (strcmp(address, "*")) {
         if (!inet_aton(address, &remote.sin_addr)) {
             struct hostent *hp = NULL;
             struct in_addr **addr;

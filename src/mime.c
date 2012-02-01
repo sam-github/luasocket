@@ -2,7 +2,7 @@
 * MIME support functions
 * LuaSocket toolkit
 *
-* RCS ID: $Id: mime.c,v 1.28 2005/11/20 07:20:23 diego Exp $
+* RCS ID: $Id: mime.c,v 1.29 2009/05/27 09:31:35 diego Exp $
 \*=========================================================================*/
 #include <string.h>
 

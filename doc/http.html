@@ -304,7 +304,7 @@ b, c, h = http.request("http://fulano:silva@www.example.com/private/index.html")
 -- the request directly.
 r, c = http.request {
   url = "http://www.example.com/private/index.html",
-  headers = { authentication = "Basic " .. (mime.b64("fulano:silva")) }
+  headers = { authorization = "Basic " .. (mime.b64("fulano:silva")) }
 }
 </pre>
 
