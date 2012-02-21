@@ -419,7 +419,7 @@ const char *socket_strerror(int err) {
         case ECONNABORTED: return "closed";
         case ECONNRESET: return "closed";
         case ETIMEDOUT: return "timeout";
-        default: return strerror(errno);
+        default: return strerror(err);
     }
 }
 
